@@ -49,24 +49,21 @@
  *    |   D   |
  *     -------  * DP
  *
- *A, B, C, D, E, F, G, DP */
-#define ledBitmap { \
- {1, 1, 1, 1, 1, 1, 0, 0},\   // 0
- {0, 1, 1, 0, 0, 0, 0, 0},\   // 1
- {1, 1, 0, 1, 1, 0, 1, 0},\   // 2
- {1, 1, 1, 1, 0, 0, 1, 0},\   // 3
- {0, 1, 1, 0, 0, 1, 1, 0},\   // 4
- {1, 0, 1, 1, 0, 1, 1, 0},\   // 5
- {0, 0, 1, 1, 1, 1, 1, 0},\   // 6
- {1, 1, 1, 0, 0, 0, 0, 0},\   // 7
- {1, 1, 1, 1, 1, 1, 1, 0},\   // 8
- {1, 1, 1, 0, 0, 1, 1, 0},\   // 9
- {1, 0, 0, 1, 1, 1, 0, 0},\   // C
- {1, 0, 0, 0, 1, 1, 1, 0}\    // F
- }
-
-// assign led bitmap to a 2D array
-const byte ledBits[12][8] = ledBitmap;
+ *ABCDEFGDP */
+const byte ledBits[12]{
+ B11111100,   // 0
+ B01100000,   // 1
+ B11011010,   // 2
+ B11110010,   // 3
+ B01100110,   // 4
+ B10110110,   // 5
+ B00111110,   // 6
+ B11100000,   // 7
+ B11111110,   // 8
+ B11100110,   // 9
+ B10011100,   // C
+ B10001110    // F
+ };
 
 // actual measured value of 10k resistor
 // used on the GND side of the 
@@ -78,41 +75,70 @@ const int measuredRes = 9960; // 9.96k on my multimeter
 typedef struct stateStruct{
   bool tempRefresh;
   bool tempMode;
-} state;
+} state_t;
 
 typedef struct timeStruct{
   uint32_t oldTime;
   uint32_t newTime;
   uint32_t intervalMS;
-} timer;
+} timer_t;
 
 typedef struct tempStruct{
   int16_t outTemp;
   int16_t centTemp;
   int8_t tempArray[4];
-} temp;
+} temp_t;
 
 // global pointers and references
-timer timeGet;
-timer *timeSet = &timeGet;
-state stateGet;
-state *stateSet = &stateGet;
-temp tempGet;
-temp *tempSet = &tempGet;
+timer_t timer;
+state_t state;
+temp_t temp;
 
 Bounce button = Bounce();
+
+// *************** Main setup & loop ***************
+
+void setup(){   
+  pinMode(buttonPin,  INPUT_PULLUP);
+  pinMode(srData, OUTPUT);
+  pinMode(srLatch, OUTPUT);
+  pinMode(srClock, OUTPUT);
+  for(int i = 0; i < 4; i++){
+    pinMode(startCA + i, OUTPUT);
+  } 
+  button.attach(buttonPin);  
+  intializeStructs(&timer, &state, &temp);
+}
+
+void loop(){
+  
+  // check inputs
+  if(getButton()){
+    changeTempMode(&state);
+    convertTemp(&temp, &state);
+    fillTempArray(&temp, &state);
+  }
+  if(checkTime(&timer)){
+      temp.centTemp = getTemperature(analogRead(thermistorPin));
+      fillTempArray(&temp, &state);
+  }
+  // get output in centigrade or fahrenheit
+  convertTemp(&temp, &state);
+  // push it out to the 4x7Seg LED
+  drawLED(&temp);       
+}
 
 // *************** Functions ***************
 
 // intialize structs - run once
-void intializeStructs(timer *t, state *s, temp *tp){
+void intializeStructs(timer_t* t, state_t* s, temp_t* tp){
   t->oldTime = millis();
   t->intervalMS = 500;
   s->tempRefresh = false;
   s->tempMode = true;
   tp->centTemp = getTemperature(analogRead(thermistorPin));
-  tp->outTemp = tempGet.centTemp;
-  fillTempArray(tempSet);
+  tp->outTemp = tp->centTemp;
+  fillTempArray(&temp, &state);
 }
 
 // get new temperature reading
@@ -128,10 +154,10 @@ int getTemperature(int thermRead){
 }
 
 // get if it is time to poll the temp sensor
-bool checkTime(timer *t){
+bool checkTime(timer_t* t){
   t->newTime = millis();
-  if (timeGet.newTime > (timeGet.oldTime + timeGet.intervalMS)){
-    t->oldTime = millis();
+  if (t->newTime > (t->oldTime + t->intervalMS)){
+    t->oldTime = t->newTime;
     return true;
   } else {
     return false;
@@ -148,36 +174,34 @@ bool getButton(){
 }
 
 // change mode between Centigrade and Fahrenheit
-void changeTempMode(state *s){
-  s->tempMode = !stateGet.tempMode;
+void changeTempMode(state_t* s){
+  s->tempMode = !s->tempMode;
 }
 
 // switch output between centigrade and fahrenheit
-void convertTemp(temp *t){
+void convertTemp(temp_t* t, state_t* s){
   // centigrade if tempMode is true...
-  if(stateGet.tempMode){
-    t->outTemp = tempGet.centTemp;
+  if(s->tempMode){
+    t->outTemp = t->centTemp;
   // ...and fahrenheit if false
   } else {
-    t->outTemp = round((tempGet.centTemp * 9) / 5) + 32;
+    t->outTemp = round((t->centTemp * 9) / 5) + 32;
   }
 }
 
 // output to the 4x7Seg LED display
-void drawLED(){
+void drawLED(temp_t* t){
+  byte ledBit;
   // cycle through anode 0 through 3 
   for(int i = 0; i < 4; i++){
-    int digit = tempGet.tempArray[i];
+    int digit = t->tempArray[i];
+    // flip all bits since using CA, delete if CC
+    ledBit = ledBits[digit] ^ 0xff;
     digitalWrite(startCA + i, HIGH);
-    // bang out bits for each digit
     digitalWrite(srLatch, LOW);
-    for (int j = 7; j >= 0; j--) {
-      digitalWrite(srClock, LOW);
-      digitalWrite(srData, !ledBits[digit][j]);
-      digitalWrite(srClock, HIGH);
-      // small pause to prevent led-bleed
-      delayMicroseconds(250);
-    }  
+    shiftOut(srData, srClock, LSBFIRST, ledBit);
+    // small pause to prevent led-bleed
+    delayMicroseconds(250);  
     digitalWrite(srLatch, HIGH);
     digitalWrite(startCA + i, LOW);
   }
@@ -185,10 +209,10 @@ void drawLED(){
 
 // split the temperature into discrete digits 
 // and add a 'C' or 'F' depending on mode
-void fillTempArray(temp *t){
+void fillTempArray(temp_t* t, state_t* s){
   for(int i = 0; i < 4; i++){
     if(i == 0){
-      if(stateGet.tempMode == 1){
+      if(s->tempMode == 1){
         // display a 'C'
         t->tempArray[i] = 10;
       } else {
@@ -196,43 +220,11 @@ void fillTempArray(temp *t){
         t->tempArray[i] = 11;
       }
     } else {
-      t->tempArray[i] = getDigit(tempGet.outTemp, i - 1);
+      t->tempArray[i] = getDigit(t->outTemp, i - 1);
     }
   }
 }
 // get a digit from a number at position pos
 int getDigit (int number, int pos){
   return (pos == 0) ? number % 10 : getDigit (number/10, --pos);
-}
-
-// *************** Main setup & loop ***************
-
-void setup() {   
-  pinMode(buttonPin,  INPUT_PULLUP);
-  pinMode(srData, OUTPUT);
-  pinMode(srLatch, OUTPUT);
-  pinMode(srClock, OUTPUT);
-  for(int i = 0; i < 4; i++){
-    pinMode(startCA + i, OUTPUT);
-  } 
-  button.attach(buttonPin);  
-  intializeStructs(timeSet, stateSet, tempSet);
-}
-
-void loop() {
-  
-  // check inputs
-  if(getButton()){
-    changeTempMode(stateSet);
-    convertTemp(tempSet);
-    fillTempArray(tempSet);
-  }
-  if(checkTime(timeSet)){
-      tempSet->centTemp = getTemperature(analogRead(thermistorPin));
-      fillTempArray(tempSet);
-  }
-  // get output in centigrade or fahrenheit
-  convertTemp(tempSet);
-  // push it out to the 4x7Seg LED
-  drawLED();       
 }
