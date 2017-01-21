@@ -3,6 +3,7 @@
  * v0.1 bare-bones setting up the flow
  * v0.2 added thermistor and button code
  * v0.3 added shift-register and 4x7seg display code
+ * v0.4 optimized a bit
  * 
  * CC-BY Roy Dybing October 2016
  * 
@@ -195,7 +196,8 @@ void drawLED(temp_t* t){
   // cycle through anode 0 through 3 
   for(int i = 0; i < 4; i++){
     int digit = t->tempArray[i];
-    // flip all bits since using CA, delete if CC
+    // flip all bits since using CA 7seg
+    // delete '^ 0xff' if using CC 7seg
     ledBit = ledBits[digit] ^ 0xff;
     digitalWrite(startCA + i, HIGH);
     digitalWrite(srLatch, LOW);
@@ -224,6 +226,7 @@ void fillTempArray(temp_t* t, state_t* s){
     }
   }
 }
+
 // get a digit from a number at position pos
 int getDigit (int number, int pos){
   return (pos == 0) ? number % 10 : getDigit (number/10, --pos);
