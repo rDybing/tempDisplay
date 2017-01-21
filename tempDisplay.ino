@@ -85,9 +85,9 @@ typedef struct timeStruct{
 } timer_t;
 
 typedef struct tempStruct{
-  int16_t outTemp;
-  int16_t centTemp;
-  int8_t tempArray[4];
+  int outTemp;
+  int centTemp;
+  byte tempArray[4];
 } temp_t;
 
 // global pointers and references
