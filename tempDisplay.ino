@@ -48,10 +48,10 @@
  *    |---G---|
  *   E|       |C
  *    |   D   |
- *     -------  * DP
- *
- *ABCDEFGDP */
+ *     -------  *P
+ */
 const byte ledBits[12]{
+//ABCDEFGP
  B11111100,   // 0
  B01100000,   // 1
  B11011010,   // 2
@@ -73,27 +73,23 @@ const int measuredRes = 9960; // 9.96k on my multimeter
 
 // *************** Datatypes ***************
 
-typedef struct stateStruct{
-  bool tempRefresh;
+typedef struct state_t{
   bool tempMode;
-} state_t;
+};
 
-typedef struct timeStruct{
+typedef struct timer_t{
   uint32_t oldTime;
   uint32_t newTime;
   uint32_t intervalMS;
-} timer_t;
+};
 
-typedef struct tempStruct{
+typedef struct temp_t{
   int outTemp;
   int centTemp;
   byte tempArray[4];
-} temp_t;
+};
 
 // global pointers and references
-timer_t timer;
-state_t state;
-temp_t temp;
 
 Bounce button = Bounce();
 
@@ -108,38 +104,44 @@ void setup(){
     pinMode(startCA + i, OUTPUT);
   } 
   button.attach(buttonPin);  
-  intializeStructs(&timer, &state, &temp);
+  int greenLEDfade = 0.0; 
 }
 
 void loop(){
-  
-  // check inputs
-  if(getButton()){
-    changeTempMode(&state);
-    convertTemp(&temp, &state);
-    fillTempArray(&temp, &state);
-  }
-  if(checkTime(&timer)){
-      temp.centTemp = getTemperature(analogRead(thermistorPin));
-      fillTempArray(&temp, &state);
-  }
-  // get output in centigrade or fahrenheit
-  convertTemp(&temp, &state);
-  // push it out to the 4x7Seg LED
-  drawLED(&temp);       
+  timer_t timer;
+  state_t state;
+  temp_t temp;
+
+  intializeStructs(timer, state, temp);
+  fillTempArray(temp, state);
+
+  while(true){
+    // check inputs
+    if(getButton()){
+      changeTempMode(state);
+      convertTemp(temp, state);
+      fillTempArray(temp, state);
+    }
+    if(checkTime(timer)){
+        temp.centTemp = getTemperature(analogRead(thermistorPin));
+        fillTempArray(temp, state);
+    }
+    // get output in centigrade or fahrenheit
+    convertTemp(temp, state);
+    // push it out to the 4x7Seg LED
+    drawLED(temp);
+  }       
 }
 
 // *************** Functions ***************
 
 // intialize structs - run once
-void intializeStructs(timer_t* t, state_t* s, temp_t* tp){
-  t->oldTime = millis();
-  t->intervalMS = 500;
-  s->tempRefresh = false;
-  s->tempMode = true;
-  tp->centTemp = getTemperature(analogRead(thermistorPin));
-  tp->outTemp = tp->centTemp;
-  fillTempArray(&temp, &state);
+void intializeStructs(timer_t &t, state_t &s, temp_t &tp){
+  t.oldTime = millis();
+  t.intervalMS = 500;
+  s.tempMode = true;
+  tp.centTemp = getTemperature(analogRead(thermistorPin));
+  tp.outTemp = tp.centTemp;
 }
 
 // get new temperature reading
@@ -155,10 +157,10 @@ int getTemperature(int thermRead){
 }
 
 // get if it is time to poll the temp sensor
-bool checkTime(timer_t* t){
-  t->newTime = millis();
-  if (t->newTime > (t->oldTime + t->intervalMS)){
-    t->oldTime = t->newTime;
+bool checkTime(timer_t &t){
+  t.newTime = millis();
+  if (t.newTime > (t.oldTime + t.intervalMS)){
+    t.oldTime = t.newTime;
     return true;
   } else {
     return false;
@@ -175,27 +177,27 @@ bool getButton(){
 }
 
 // change mode between Centigrade and Fahrenheit
-void changeTempMode(state_t* s){
-  s->tempMode = !s->tempMode;
+void changeTempMode(state_t &s){
+  s.tempMode = !s.tempMode;
 }
 
 // switch output between centigrade and fahrenheit
-void convertTemp(temp_t* t, state_t* s){
+void convertTemp(temp_t &t, state_t &s){
   // centigrade if tempMode is true...
-  if(s->tempMode){
-    t->outTemp = t->centTemp;
+  if(s.tempMode){
+    t.outTemp = t.centTemp;
   // ...and fahrenheit if false
   } else {
-    t->outTemp = round((t->centTemp * 9) / 5) + 32;
+    t.outTemp = round((t.centTemp * 9) / 5) + 32;
   }
 }
 
 // output to the 4x7Seg LED display
-void drawLED(temp_t* t){
+void drawLED(temp_t &t){
   byte ledBit;
   // cycle through anode 0 through 3 
   for(int i = 0; i < 4; i++){
-    int digit = t->tempArray[i];
+    int digit = t.tempArray[i];
     // flip all bits since using CA 7seg
     // delete '^ 0xff' if using CC 7seg
     ledBit = ledBits[digit] ^ 0xff;
@@ -211,18 +213,18 @@ void drawLED(temp_t* t){
 
 // split the temperature into discrete digits 
 // and add a 'C' or 'F' depending on mode
-void fillTempArray(temp_t* t, state_t* s){
+void fillTempArray(temp_t &t, state_t &s){
   for(int i = 0; i < 4; i++){
     if(i == 0){
-      if(s->tempMode == 1){
+      if(s.tempMode == 1){
         // display a 'C'
-        t->tempArray[i] = 10;
+        t.tempArray[i] = 10;
       } else {
         // display a 'F'
-        t->tempArray[i] = 11;
+        t.tempArray[i] = 11;
       }
     } else {
-      t->tempArray[i] = getDigit(t->outTemp, i - 1);
+      t.tempArray[i] = getDigit(t.outTemp, i - 1);
     }
   }
 }
