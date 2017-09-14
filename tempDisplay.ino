@@ -4,8 +4,10 @@
  * v0.2 added thermistor and button code
  * v0.3 added shift-register and 4x7seg display code
  * v0.4 optimized a bit
+ * v0.5 cleaned up slightly
  * 
- * CC-BY Roy Dybing October 2016
+ * CC-BY Roy Dybing 
+ * October 2016 -> September 2017
  * 
  * small weekend project inspired 
  * by this reddit thread:
@@ -86,10 +88,8 @@ typedef struct timer_t{
 typedef struct temp_t{
   int outTemp;
   int centTemp;
-  byte tempArray[4];
+  int tempArray[4];
 };
-
-// global pointers and references
 
 Bounce button = Bounce();
 
@@ -116,7 +116,6 @@ void loop(){
   fillTempArray(temp, state);
 
   while(true){
-    // check inputs
     if(getButton()){
       changeTempMode(state);
       convertTemp(temp, state);
@@ -126,9 +125,7 @@ void loop(){
         temp.centTemp = getTemperature(analogRead(thermistorPin));
         fillTempArray(temp, state);
     }
-    // get output in centigrade or fahrenheit
     convertTemp(temp, state);
-    // push it out to the 4x7Seg LED
     drawLED(temp);
   }       
 }
@@ -183,10 +180,8 @@ void changeTempMode(state_t &s){
 
 // switch output between centigrade and fahrenheit
 void convertTemp(temp_t &t, state_t &s){
-  // centigrade if tempMode is true...
   if(s.tempMode){
     t.outTemp = t.centTemp;
-  // ...and fahrenheit if false
   } else {
     t.outTemp = round((t.centTemp * 9) / 5) + 32;
   }
@@ -195,7 +190,6 @@ void convertTemp(temp_t &t, state_t &s){
 // output to the 4x7Seg LED display
 void drawLED(temp_t &t){
   byte ledBit;
-  // cycle through anode 0 through 3 
   for(int i = 0; i < 4; i++){
     int digit = t.tempArray[i];
     // flip all bits since using CA 7seg
