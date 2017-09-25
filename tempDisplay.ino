@@ -103,8 +103,7 @@ void setup(){
   for(int i = 0; i < 4; i++){
     pinMode(startCA + i, OUTPUT);
   } 
-  button.attach(buttonPin);  
-  int greenLEDfade = 0.0; 
+  button.attach(buttonPin);
 }
 
 void loop(){
